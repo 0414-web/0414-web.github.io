@@ -1,14 +1,115 @@
-<!-- index.html -->
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>웹 호스팅</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>예약 체크리스트 앱</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { color: #2c3e50; }
+    .container { max-width: 600px; margin: auto; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; }
+    input, textarea, button { width: 100%; padding: 8px; }
+    .reservation-list { margin-top: 30px; }
+    .reservation-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+  </style>
 </head>
 <body>
-    git pages 입니다.
+  <div class="container">
+    <h1>예약 체크리스트 앱</h1>
+
+    <!-- 로그인 영역 -->
+    <div id="login-section">
+      <h2>로그인</h2>
+      <div class="form-group">
+        <label for="username">예약자명</label>
+        <input type="text" id="username" placeholder="이름 입력" />
+      </div>
+      <button onclick="login()">로그인</button>
+    </div>
+
+    <!-- 예약 등록 영역 -->
+    <div id="reservation-section" style="display:none;">
+      <h2>예약 등록</h2>
+      <div class="form-group">
+        <label for="date">날짜</label>
+        <input type="date" id="date" />
+      </div>
+      <div class="form-group">
+        <label for="time">시간</label>
+        <input type="time" id="time" />
+      </div>
+      <div class="form-group">
+        <label for="place">장소</label>
+        <input type="text" id="place" placeholder="예: 회의실 A" />
+      </div>
+      <div class="form-group">
+        <label for="checklist">체크리스트</label>
+        <textarea id="checklist" placeholder="준비물 입력 (쉼표로 구분)"></textarea>
+      </div>
+      <button onclick="addReservation()">예약 등록</button>
+
+      <!-- 예약 목록 -->
+      <div class="reservation-list">
+        <h2>예약 목록</h2>
+        <div id="reservations"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let reservations = [];
+
+    function login() {
+      const username = document.getElementById('username').value.trim();
+      if (username) {
+        currentUser = username;
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('reservation-section').style.display = 'block';
+        alert(username + "님 환영합니다!");
+      } else {
+        alert("예약자명을 입력하세요.");
+      }
+    }
+
+    function addReservation() {
+      const date = document.getElementById('date').value;
+      const time = document.getElementById('time').value;
+      const place = document.getElementById('place').value.trim();
+      const checklist = document.getElementById('checklist').value.split(',');
+
+      if (!date || !time || !place) {
+        alert("날짜, 시간, 장소를 모두 입력하세요.");
+        return;
+      }
+
+      const reservation = {
+        user: currentUser,
+        date: date,
+        time: time,
+        place: place,
+        checklist: checklist.map(item => item.trim())
+      };
+
+      reservations.push(reservation);
+      renderReservations();
+    }
+
+    function renderReservations() {
+      const container = document.getElementById('reservations');
+      container.innerHTML = '';
+      reservations.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'reservation-item';
+        div.innerHTML = `
+          <strong>${r.user}</strong> - ${r.date} ${r.time} @ ${r.place}<br/>
+          체크리스트: ${r.checklist.join(', ')}
+        `;
+        container.appendChild(div);
+      });
+    }
+  </script>
 </body>
 </html>
-출처: https://devyihyun.tistory.com/203 [이롭게 현명하게:티스토리]
