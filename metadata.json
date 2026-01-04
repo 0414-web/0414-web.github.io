@@ -1,5 +1,1 @@
-{
-  "name": "reservation app",
-  "description": "A calendar-based reservation system for Morning (07:00), Lunch (12:00), and Dinner (19:00) slots with AI-powered daily summaries.",
-  "requestFramePermissions": []
-}
+
