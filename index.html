@@ -3,15 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>문경 학사 식사 신청</title>
+  <title>문경 학사 식사 신청 (Live)</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
+  
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
   <style>
-    body { font-family: 'Noto Sans KR', sans-serif; background-color: #f9fafb; }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #f9fafb;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
   </style>
 
   <script type="importmap">
@@ -23,7 +34,6 @@
     }
   }
   </script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="pb-20">
   <div id="root"></div>
@@ -32,11 +42,12 @@
     import React, { useState, useEffect, useMemo } from 'react';
     import { createRoot } from 'react-dom/client';
     import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+
+    // --- [1] Firebase 라이브러리 가져오기 ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    // --- [Firebase keycode] ---
-    // Firebase 콘솔에서 복사한 내용
+   // --- [Firebase keycode] ---
   const firebaseConfig = {
     apiKey: "AIzaSyCwIp4CA2P41CBOzirB6dTrOTzMO4DWYpA",
     authDomain: "list-03-1efd8.firebaseapp.com",
@@ -46,68 +57,138 @@
     appId: "1:73291844896:web:802e4821e16313eee0db45"
   };
 
+    // Firebase 초기화
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- 데이터 설정 ---
-    const TIME_SLOTS = ['아침(07:00)', '점심(12:00)', '저녁(19:00)'];
-    
-    // 사용자 목록 (필요에 따라 수정하세요)
-    const MALE_NAMES = ['철수', '영희', '바둑이', '호날두', 'ㄱㄱㄱ', 'ㄱㄱㄴ', 'ㄱㄱㄷ', 'ㄱㄱㅁ', 'ㄱㄱㄹ', 'ㄱㄱㅂ', 'ㄱㄱㅅ', 'ㄱㄱㅇ', 'ㄱㄱㅈ', 'ㄱㄱㅊ', 'ㄱㄱㅋ', 'ㄱㄱㅌ', 'ㄱㄱㅍ', 'ㄱㄱㅎ'];
-    const FEMALE_NAMES = ['ㅇㅇㅇ', 'ㅇㅇㄹ', 'ㅇㅇㅎ', 'ㅇㅇㄱ', 'ㅇㅇㄷ', 'ㅇㅇㅈ', 'ㅇㅇㅂ', 'ㅇㅇㅁ', 'ㅇㅇㄴ', 'ㅇㅇㅋ', 'ㅇㅇㅌ', 'ㅇㅇㅊ', 'ㅇㅇㅍ', 'ㅎㅎㅇ', 'ㅎㅎㄱ', 'ㅎㅎㄴ', 'ㅎㅎㅌ'];
 
-    const createUsers = (names, gender) => names.map((name, i) => ({
-      id: `${gender}-${i}`, name, gender,
-      avatarColor: gender === 'male' ? 'bg-blue-100 text-blue-600' : 'bg-pink-100 text-pink-600'
-    }));
+    // --- Constants & Types ---
+    const TimeSlot = {
+      MORNING: '아침(07:00)',
+      LUNCH: '점심(12:00)',
+      DINNER: '저녁(19:00)',
+    };
 
-    const USERS = [
-      ...createUsers(MALE_NAMES, 'male'),
-      ...createUsers(FEMALE_NAMES, 'female')
+    const TIME_SLOTS = [TimeSlot.MORNING, TimeSlot.LUNCH, TimeSlot.DINNER];
+
+    const MALE_ADDITIONAL_NAMES = [
+      '호날두', '메시', '홀란드', 'ㄱㄱㄱ', 'ㄱㄱㄴ', 'ㄱㄱㄷ', 'ㄱㄱㅁ', 'ㄱㄱㄹ', 'ㄱㄱㅂ', 'ㄱㄱㅅ',
+      'ㄱㄱㅇ', 'ㄱㄱㅈ', 'ㄱㄱㅊ', 'ㄱㄱㅋ', 'ㄱㄱㅌ', 'ㄱㄱㅍ', 'ㄱㄱㅎ'
     ];
 
-    // --- 유틸리티 ---
-    const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const getWeekDays = (start) => Array.from({length:7}, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    const FEMALE_ADDITIONAL_NAMES = [
+      'ㅇㅇㅇ', 'ㅇㅇㄹ', 'ㅇㅇㅎ', 'ㅇㅇㄱ', 'ㅇㅇㄷ', 'ㅇㅇㅈ', 'ㅇㅇㅂ',
+      'ㅇㅇㅁ', 'ㅇㅇㄴ', 'ㅇㅇㅋ', 'ㅇㅇㅌ', 'ㅇㅇㅊ', 'ㅇㅇㅍ', 'ㅎㅎㅇ',
+      'ㅎㅎㄱ', 'ㅎㅎㄴ', 'ㅎㅎㅌ'
+    ];
 
-    // --- 마감 로직 ---
+    const createUsers = (names, gender, idPrefix) => {
+      return names.map((name, index) => ({
+        id: `${idPrefix}-${index}`,
+        name,
+        avatarColor: gender === 'male' ? 'bg-blue-100 text-blue-600' : 'bg-pink-100 text-pink-600',
+        gender,
+      }));
+    };
+
+    const USERS = [
+      { id: '1', name: '오타니', avatarColor: 'bg-blue-100 text-blue-600', gender: 'male' },
+      ...createUsers(MALE_ADDITIONAL_NAMES, 'male', 'male-custom'),
+      ...createUsers(FEMALE_ADDITIONAL_NAMES, 'female', 'female-custom'),
+    ];
+
+    // --- Utils ---
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const getDisplayDate = (date) => {
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      return {
+        dayName: days[date.getDay()],
+        dateNum: String(date.getDate()),
+        fullDate: formatDate(date),
+      };
+    };
+
+    const getWeekDays = (startDate) => {
+      const dates = [];
+      const start = new Date(startDate);
+      for (let i = 0; i < 7; i++) {
+        const nextDay = new Date(start);
+        nextDay.setDate(start.getDate() + i);
+        dates.push(nextDay);
+      }
+      return dates;
+    };
+
+    // --- Deadline Logic ---
     const isRegistrationClosed = (dateStr, slot) => {
       const now = new Date();
       const todayStr = formatDate(now);
+
       if (dateStr < todayStr) return true;
       if (dateStr > todayStr) return false;
+
+      const currentHour = now.getHours();
       
-      const hour = now.getHours();
-      if (slot.includes('아침')) return hour >= 5;
-      if (slot.includes('점심')) return hour >= 10;
-      if (slot.includes('저녁')) return hour >= 17;
+      // 마감 시간 설정 (0~23시)
+      if (slot === TimeSlot.MORNING) return currentHour >= 5;
+      if (slot === TimeSlot.LUNCH) return currentHour >= 10;
+      if (slot === TimeSlot.DINNER) return currentHour >= 17;
+
       return false;
     };
 
-    // --- 컴포넌트 ---
-    const WeekCalendar = ({ selectedDate, onSelectDate, startDate, setStartDate }) => {
+    // --- Components ---
+
+    const WeekCalendar = ({ selectedDate, onSelectDate, startDate, onPrevWeek, onNextWeek }) => {
       const days = getWeekDays(startDate);
-      const moveWeek = (d) => { const n = new Date(startDate); n.setDate(startDate.getDate() + d); setStartDate(n); };
 
       return (
         <div className="bg-white shadow-sm border-b sticky top-0 z-10">
           <div className="max-w-md mx-auto px-4 py-4">
-            <div className="flex justify-between items-center mb-4">
-              <button onClick={() => moveWeek(-7)} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
-              <h2 className="text-lg font-bold text-gray-800">{startDate.getMonth()+1}월 {Math.ceil(startDate.getDate()/7)}주차</h2>
-              <button onClick={() => moveWeek(7)} className="p-1 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={onPrevWeek} className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+                <ChevronLeft size={20} />
+              </button>
+              <h2 className="text-lg font-bold text-gray-800">
+                {startDate.getMonth() + 1}월 {Math.ceil(startDate.getDate() / 7)}주차 일정
+              </h2>
+              <button onClick={onNextWeek} className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+                <ChevronRight size={20} />
+              </button>
             </div>
-            <div className="flex justify-between overflow-x-auto scrollbar-hide gap-2 pb-2">
-              {days.map(d => {
-                const fullDate = formatDate(d);
-                const isSel = selectedDate === fullDate;
-                const dayName = ['일','월','화','수','목','금','토'][d.getDay()];
-                const color = d.getDay()===0 ? 'text-red-500' : d.getDay()===6 ? 'text-blue-500' : 'text-gray-600';
+            
+            <div className="flex justify-between space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+              {days.map((date) => {
+                const { dayName, dateNum, fullDate } = getDisplayDate(date);
+                const isSelected = selectedDate === fullDate;
+                const isSunday = date.getDay() === 0;
+                const isSaturday = date.getDay() === 6;
+
+                let textColor = 'text-gray-600';
+                if (isSunday) textColor = 'text-red-500';
+                if (isSaturday) textColor = 'text-blue-500';
+                if (isSelected) textColor = 'text-white';
+
                 return (
-                  <button key={fullDate} onClick={() => onSelectDate(fullDate)} 
-                    className={`flex flex-col items-center min-w-[3.5rem] py-3 rounded-2xl transition-all ${isSel ? 'bg-indigo-600 scale-105 shadow-md' : 'bg-gray-50'}`}>
-                    <span className={`text-xs mb-1 ${isSel ? 'text-indigo-200' : 'text-gray-400'}`}>{dayName}</span>
-                    <span className={`text-lg font-bold ${isSel ? 'text-white' : color}`}>{d.getDate()}</span>
+                  <button
+                    key={fullDate}
+                    onClick={() => onSelectDate(fullDate)}
+                    className={`flex flex-col items-center justify-center min-w-[3.5rem] py-3 rounded-2xl transition-all duration-200 ${
+                      isSelected ? 'bg-indigo-600 shadow-md transform scale-105' : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className={`text-xs font-medium mb-1 ${isSelected ? 'text-indigo-200' : 'text-gray-400'}`}>
+                      {dayName}
+                    </span>
+                    <span className={`text-lg font-bold ${textColor}`}>
+                      {dateNum}
+                    </span>
                   </button>
                 );
               })}
@@ -117,66 +198,122 @@
       );
     };
 
-    const DailyTable = ({ data, selectedDate, onToggle }) => {
+    const DailyTable = ({ users, dailyData, selectedDate, onToggle }) => {
       const stats = useMemo(() => {
-        const s = {};
-        TIME_SLOTS.forEach(slot => s[slot] = { total: 0, male: 0, female: 0 });
-        USERS.forEach(u => {
+        const slotStats = {
+          [TimeSlot.MORNING]: { total: 0, male: 0, female: 0 },
+          [TimeSlot.LUNCH]: { total: 0, male: 0, female: 0 },
+          [TimeSlot.DINNER]: { total: 0, male: 0, female: 0 },
+        };
+
+        users.forEach(user => {
           TIME_SLOTS.forEach(slot => {
-            if (data[u.name]?.[slot]) { s[slot].total++; u.gender==='male' ? s[slot].male++ : s[slot].female++; }
+            if (dailyData[user.name]?.[slot]) {
+              if (user.gender === 'male') slotStats[slot].male++;
+              else slotStats[slot].female++;
+              slotStats[slot].total++;
+            }
           });
         });
-        return s;
-      }, [data]);
+
+        return { slotStats };
+      }, [users, dailyData]);
 
       return (
-        <div className="space-y-4">
+        <div className="flex flex-col space-y-4">
           <div className="grid grid-cols-3 gap-2">
-            {TIME_SLOTS.map(slot => (
-              <div key={slot} className="bg-white p-3 rounded-xl border shadow-sm text-center">
-                <div className="text-xs font-bold text-gray-500 mb-1">{slot.split('(')[0]}</div>
-                <div className="text-xl font-extrabold text-gray-800 mb-2">{stats[slot].total}</div>
-                <div className="text-[11px] font-medium space-x-1">
-                  <span className="text-blue-500 bg-blue-50 px-1 rounded">남 {stats[slot].male}</span>
-                  <span className="text-pink-500 bg-pink-50 px-1 rounded">여 {stats[slot].female}</span>
-                </div>
+            {TIME_SLOTS.map((slot) => (
+              <div key={slot} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                 <span className="text-xs font-bold text-gray-500 mb-1">{slot}</span>
+                 <div className="text-xl font-extrabold text-gray-800 leading-none mb-2">
+                   {stats.slotStats[slot].total}
+                 </div>
+                 <div className="flex items-center gap-2 text-[11px] font-medium">
+                    <span className="text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">남 {stats.slotStats[slot].male}</span>
+                    <span className="text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded">여 {stats.slotStats[slot].female}</span>
+                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[320px]">
-                <thead className="bg-gray-50 border-b">
+              <table className="w-full text-sm text-left border-collapse min-w-[320px]">
+                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                   <tr>
-                    <th className="px-3 py-3 w-24 text-center">이름</th>
-                    {TIME_SLOTS.map(s => <th key={s} className="px-1 text-center min-w-[60px]">{s.split('(')[0]}</th>)}
+                    <th className="px-3 py-3 w-28 whitespace-nowrap text-center text-xs">이름</th>
+                    {TIME_SLOTS.map(slot => (
+                      <th key={slot} className="px-1 py-3 text-center min-w-[60px] text-xs">{slot}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {USERS.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-center font-semibold">
-                        <span className={user.gender==='male'?'text-blue-900':'text-pink-900'}>{user.name}</span>
+                  {users.map(user => (
+                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-center">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shrink-0 ${user.avatarColor}`}>
+                            {user.name[0]}
+                          </div>
+                          <span className={`font-semibold text-sm whitespace-nowrap ${user.gender === 'male' ? 'text-blue-900' : 'text-pink-900'}`}>{user.name}</span>
+                        </div>
                       </td>
                       {TIME_SLOTS.map(slot => {
-                        const isSel = data[user.name]?.[slot];
-                        const closed = isRegistrationClosed(selectedDate, slot);
-                        let btnClass = `w-full h-10 rounded-lg flex items-center justify-center transition-all ${
-                          closed ? 'cursor-not-allowed opacity-50 ' + (isSel ? (user.gender==='male'?'bg-blue-500 text-white':'bg-pink-500 text-white') : 'bg-gray-100') :
-                          isSel ? (user.gender==='male'?'bg-blue-500 text-white active:scale-95':'bg-pink-500 text-white active:scale-95') : 'bg-gray-50 hover:bg-gray-100 active:scale-95'
-                        }`;
-                        return (
-                          <td key={slot} className="p-1">
-                            <button onClick={() => !closed && onToggle(user.name, slot, isSel)} disabled={closed} className={btnClass}>
-                              {isSel ? <Check size={18} strokeWidth={3}/> : <div className="w-1.5 h-1.5 rounded-full bg-gray-200"/>}
-                            </button>
-                          </td>
-                        );
+                          const isSelected = dailyData[user.name]?.[slot];
+                          const isClosed = isRegistrationClosed(selectedDate, slot);
+
+                          let btnClass = "w-full h-10 rounded-lg flex items-center justify-center transition-all duration-200 active:scale-95 ";
+                          
+                          if (isClosed) {
+                            if (isSelected) {
+                              btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
+                              btnClass += " cursor-not-allowed opacity-50"; 
+                            } else {
+                              btnClass += "bg-gray-500 text-gray-700 cursor-not-allowed";
+                            }
+                          } else {
+                            if (isSelected) {
+                              btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
+                            } else {
+                              btnClass += 'bg-gray-50 text-gray-300 hover:bg-gray-100';
+                            }
+                          }
+
+                          return (
+                            <td key={slot} className="p-1 text-center align-middle">
+                              <button
+                                onClick={() => !isClosed && onToggle(user.name, slot, isSelected)}
+                                disabled={isClosed}
+                                className={btnClass}
+                              >
+                                {isSelected ? (
+                                  <Check size={18} strokeWidth={3} />
+                                ) : (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                )}
+                              </button>
+                            </td>
+                          );
                       })}
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-gray-50 font-semibold text-gray-600 border-t border-gray-200">
+                    <tr>
+                      <td className="px-3 py-3 text-center text-xs">합계</td>
+                      {TIME_SLOTS.map(slot => (
+                        <td key={slot} className="text-center py-2 text-xs">
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-gray-900 font-bold mb-0.5">{stats.slotStats[slot].total}</span>
+                            <div className="flex gap-1 text-[9px] text-gray-400 font-normal">
+                              <span className="text-blue-500">M:{stats.slotStats[slot].male}</span>
+                              <span className="text-pink-500">F:{stats.slotStats[slot].female}</span>
+                            </div>
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -184,38 +321,112 @@
       );
     };
 
-    // --- 메인 앱 ---
+    // --- Main App ---
     const App = () => {
-      const [date, setDate] = useState(formatDate(new Date()));
-      const [weekStart, setWeekStart] = useState(new Date());
-      const [data, setData] = useState({});
+      const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+      const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
+      const [registrations, setRegistrations] = useState({});
 
+      // [3] Firebase 실시간 구독 (useEffect)
       useEffect(() => {
-        const unsub = onSnapshot(doc(db, "daily_meals", date), (s) => setData(s.exists() ? s.data() : {}));
-        return () => unsub();
-      }, [date]);
+        // 선택된 날짜에 해당하는 문서를 구독합니다. (컬렉션 이름: daily_meals, 문서 ID: 2024-05-20 형식)
+        const docRef = doc(db, "daily_meals", selectedDate);
+        
+        const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
+          if (docSnapshot.exists()) {
+            // DB에 데이터가 있으면 해당 날짜 state 업데이트
+            setRegistrations(prev => ({
+              ...prev,
+              [selectedDate]: docSnapshot.data()
+            }));
+          } else {
+            // 데이터가 없으면 빈 객체로 초기화
+            setRegistrations(prev => ({
+              ...prev,
+              [selectedDate]: {}
+            }));
+          }
+        }, (error) => {
+          console.error("데이터 불러오기 실패:", error);
+        });
 
-      const toggle = async (name, slot, val) => {
-        if (isRegistrationClosed(date, slot)) return alert('마감되었습니다.');
+        // 날짜가 바뀌거나 컴포넌트가 꺼질 때 구독 해제
+        return () => unsubscribe();
+      }, [selectedDate]); // selectedDate가 바뀔 때마다 실행
+
+      const handlePrevWeek = () => {
+        const newDate = new Date(currentWeekStart);
+        newDate.setDate(newDate.getDate() - 7);
+        setCurrentWeekStart(newDate);
+      };
+
+      const handleNextWeek = () => {
+        const newDate = new Date(currentWeekStart);
+        newDate.setDate(newDate.getDate() + 7);
+        setCurrentWeekStart(newDate);
+      };
+
+      // [4] 데이터 저장 함수 (Firestore setDoc 사용)
+      const toggleRegistration = async (userName, slot, currentValue) => {
+        // 마감 체크는 컴포넌트 레벨에서도 하지만 여기서도 안전장치
+        if (isRegistrationClosed(selectedDate, slot)) {
+          alert('신청 마감 시간이 지났습니다.');
+          return;
+        }
+
         try {
-          await setDoc(doc(db, "daily_meals", date), { [name]: { [slot]: !val } }, { merge: true });
-        } catch (e) { console.error(e); alert('오류가 발생했습니다.'); }
+          // Firestore 문서 참조
+          const docRef = doc(db, "daily_meals", selectedDate);
+          
+          // 저장할 데이터 구조 생성 (userName 아래에 slot 값을 true/false로 저장)
+          // { "철수": { "아침": true } } 형태
+          const newData = {
+            [userName]: {
+              [slot]: !currentValue
+            }
+          };
+
+          // Firestore에 저장 (merge: true 옵션으로 기존 데이터 유지하며 덮어쓰기)
+          await setDoc(docRef, newData, { merge: true });
+          
+          // *주의: 여기서 setRegistrations(setState)를 호출하지 않습니다.
+          // setDoc이 성공하면 위쪽 useEffect의 onSnapshot이 감지하고 자동으로 화면을 갱신합니다.
+          
+        } catch (e) {
+          console.error("저장 실패:", e);
+          alert("저장에 실패했습니다. 인터넷 연결을 확인하세요.");
+        }
       };
 
       return (
-        <div className="min-h-screen bg-gray-50">
-          <header className="bg-white px-6 pt-10 pb-4 border-b sticky top-0 z-20 shadow-sm">
+        <div className="min-h-screen bg-gray-50 font-sans">
+          <header className="bg-white px-6 pt-12 pb-6 border-b sticky top-0 z-20 shadow-sm">
             <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
+            <p className="text-xs text-gray-400 mt-1">Firebase 실시간 연동됨</p>
           </header>
-          <WeekCalendar selectedDate={date} onSelectDate={setDate} startDate={weekStart} setStartDate={setWeekStart} />
+
+          <WeekCalendar
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            startDate={currentWeekStart}
+            onPrevWeek={handlePrevWeek}
+            onNextWeek={handleNextWeek}
+          />
+
           <main className="max-w-md mx-auto px-4 py-6">
-            <DailyTable data={data} selectedDate={date} onToggle={toggle} />
+            <DailyTable 
+              users={USERS} 
+              dailyData={registrations[selectedDate] || {}}
+              selectedDate={selectedDate}
+              onToggle={toggleRegistration}
+            />
           </main>
         </div>
       );
     };
 
-    createRoot(document.getElementById('root')).render(<App />);
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
