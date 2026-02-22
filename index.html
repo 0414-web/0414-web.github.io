@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>문경 학사 식사 신청</title>
   
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   
+  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
@@ -16,26 +19,25 @@
       font-family: 'Noto Sans KR', sans-serif;
       background-color: #f9fafb;
     }
-    /*크롬 사파리 에서 스크롤바를 숨김 */
     .scrollbar-hide::-webkit-scrollbar {
       display: none;
     }
-    /*스크롤바를 숨기는 CSS */
     .scrollbar-hide {
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
   </style>
 
+  <!-- Import Map for React modules -->
   <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@18.2.0",
-      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-      "lucide-react": "https://esm.sh/lucide-react@0.263.1"
-    }
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.263.1"
   }
-  </script>
+}
+</script>
 </head>
 <body class="pb-20">
   <div id="root"></div>
@@ -45,25 +47,7 @@
     import { createRoot } from 'react-dom/client';
     import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
-    // --- [1] Firebase 설정 및 초기화 ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-
-    // Firebase 프로젝트 연결 정보
-    const firebaseConfig = {
-      apiKey: "AIzaSyCwIp4CA2P41CBOzirB6dTrOTzMO4DWYpA",
-      authDomain: "list-03-1efd8.firebaseapp.com",
-      projectId: "list-03-1efd8",
-      storageBucket: "list-03-1efd8.firebasestorage.app",
-      messagingSenderId: "73291844896",
-      appId: "1:73291844896:web:802e4821e16313eee0db45"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-
-    // --- [2] 데이터 상수 및 타입 정의 ---
+    // --- Constants & Types ---
     const TimeSlot = {
       MORNING: '아침(07:00)',
       LUNCH: '점심(12:00)',
@@ -72,7 +56,6 @@
 
     const TIME_SLOTS = [TimeSlot.MORNING, TimeSlot.LUNCH, TimeSlot.DINNER];
 
-    // 남학생, 여학생 명단 배열
     const MALE_ADDITIONAL_NAMES = [
       '황규승', '이평화', '이동윤', '홍석환', '박민준', '김강산', '황언수', '류민혁', '김한섭', '김준길',
       '서희원', '이해성', '최민영', '김태헌', '고혜주', '정태우', '황민서'
@@ -84,27 +67,22 @@
       '유수민', '김아련', '박나혜', '강세진', '채지혜', '김호진', '김예린'
     ];
 
-    // 이름 배열을 받아서 객체 형태의 사용자 데이터로 변환해 주는 함수
     const createUsers = (names, gender, idPrefix) => {
       return names.map((name, index) => ({
         id: `${idPrefix}-${index}`,
         name,
-        // 성별에 따라 색상을 다르게 지정
         avatarColor: gender === 'male' ? 'bg-blue-100 text-blue-600' : 'bg-pink-100 text-pink-600',
         gender,
       }));
     };
 
-    // 전체 사용자 명단 생성
     const USERS = [
       { id: '1', name: '권효상', avatarColor: 'bg-blue-100 text-blue-600', gender: 'male' },
       ...createUsers(MALE_ADDITIONAL_NAMES, 'male', 'male-custom'),
       ...createUsers(FEMALE_ADDITIONAL_NAMES, 'female', 'female-custom'),
     ];
 
-
-    // --- [3] 유틸리티 함수 (날짜 관련) ---
-    // Date 객체를 'YYYY-MM-DD' 형태의 문자열로 변환
+    // --- Utils ---
     const formatDate = (date) => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -112,7 +90,35 @@
       return `${year}-${month}-${day}`;
     };
 
-    // 화면에 표시할 요일, 일, 전체 날짜 포맷을 반환
+    const isRegistrationAllowed = (targetDateStr, slot) => {
+      const now = new Date();
+      const todayStr = formatDate(now);
+      
+      // 1. Past dates are closed
+      if (targetDateStr < todayStr) return false;
+
+      // 2. Too far in future (more than 7 days)
+      const targetDate = new Date(targetDateStr);
+      const maxDate = new Date(now);
+      maxDate.setDate(now.getDate() + 7);
+      const maxDateStr = formatDate(maxDate);
+      
+      if (targetDateStr > maxDateStr) return false;
+
+      // 3. If today, check time
+      if (targetDateStr === todayStr) {
+        const currentHour = now.getHours();
+        // Morning: until 5am (05:00)
+        if (slot === TimeSlot.MORNING && currentHour >= 5) return false;
+        // Lunch: until 10am (10:00)
+        if (slot === TimeSlot.LUNCH && currentHour >= 10) return false;
+        // Dinner: until 5pm (17:00)
+        if (slot === TimeSlot.DINNER && currentHour >= 17) return false;
+      }
+
+      return true;
+    };
+
     const getDisplayDate = (date) => {
       const days = ['일', '월', '화', '수', '목', '금', '토'];
       return {
@@ -122,7 +128,6 @@
       };
     };
 
-    // 기준 날짜로부터 7일간의 Date 객체 배열을 생성 (주간 달력용)
     const getWeekDays = (startDate) => {
       const dates = [];
       const start = new Date(startDate);
@@ -134,53 +139,32 @@
       return dates;
     };
 
+    // --- Components ---
 
-    // --- [4] 마감 로직 체크 함수 ---
-    // 특정 날짜와 시간대(아침/점심/저녁)의 신청이 마감되었는지 판단
-    const isRegistrationClosed = (dateStr, slot) => {
-      const now = new Date();
-      const todayStr = formatDate(now);
-
-      // 선택한 날짜가 오늘보다 이전이면 무조건 마감
-      if (dateStr < todayStr) return true;
-      // 선택한 날짜가 오늘보다 이후면 무조건 열림
-      if (dateStr > todayStr) return false;
-
-      // 오늘인 경우, 현재 시간을 기준으로 마감 여부 결정
-      const currentHour = now.getHours();
-      
-      // 아침은 5시, 점심은 10시, 저녁은 17시 이후에 마감
-      if (slot === TimeSlot.MORNING) return currentHour >= 5;
-      if (slot === TimeSlot.LUNCH) return currentHour >= 10;
-      if (slot === TimeSlot.DINNER) return currentHour >= 17;
-
-      return false;
-    };
-
-
-    // --- [5] UI 컴포넌트 ---
-
-    // (1) 주간 달력 컴포넌트
     const WeekCalendar = ({ selectedDate, onSelectDate, startDate, onPrevWeek, onNextWeek }) => {
       const days = getWeekDays(startDate);
 
       return (
         <div className="bg-white shadow-sm border-b sticky top-0 z-10">
           <div className="max-w-md mx-auto px-4 py-4">
-            {/* 주간 이동 버튼 및 현재 월/주차 표시 부분 */}
             <div className="flex items-center justify-between mb-4">
-              <button onClick={onPrevWeek} className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+              <button 
+                onClick={onPrevWeek}
+                className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+              >
                 <ChevronLeft size={20} />
               </button>
               <h2 className="text-lg font-bold text-gray-800">
                 {startDate.getMonth() + 1}월 {Math.ceil(startDate.getDate() / 7)}주차 일정
               </h2>
-              <button onClick={onNextWeek} className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+              <button 
+                onClick={onNextWeek}
+                className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+              >
                 <ChevronRight size={20} />
               </button>
             </div>
             
-            {/* 7일간의 날짜 버튼 나열 */}
             <div className="flex justify-between space-x-2 overflow-x-auto pb-2 scrollbar-hide">
               {days.map((date) => {
                 const { dayName, dateNum, fullDate } = getDisplayDate(date);
@@ -188,7 +172,6 @@
                 const isSunday = date.getDay() === 0;
                 const isSaturday = date.getDay() === 6;
 
-                // 주말 및 선택 여부에 따른 글자 색상 설정
                 let textColor = 'text-gray-600';
                 if (isSunday) textColor = 'text-red-500';
                 if (isSaturday) textColor = 'text-blue-500';
@@ -199,7 +182,9 @@
                     key={fullDate}
                     onClick={() => onSelectDate(fullDate)}
                     className={`flex flex-col items-center justify-center min-w-[3.5rem] py-3 rounded-2xl transition-all duration-200 ${
-                      isSelected ? 'bg-indigo-600 shadow-md transform scale-105' : 'bg-gray-50 hover:bg-gray-100'
+                      isSelected
+                        ? 'bg-indigo-600 shadow-md transform scale-105'
+                        : 'bg-gray-50 hover:bg-gray-100'
                     }`}
                   >
                     <span className={`text-xs font-medium mb-1 ${isSelected ? 'text-indigo-200' : 'text-gray-400'}`}>
@@ -217,26 +202,23 @@
       );
     };
 
-    // (2) 일간 통계 및 신청 테이블 컴포넌트
     const DailyTable = ({ users, dailyData, selectedDate, onToggle }) => {
-      
-      // [useMemo] dailyData(Firebase에서 받아온 데이터)가 변경될 때만 통계를 다시 계산하여 성능 최적화
       const stats = useMemo(() => {
-        // 통계 초기값 세팅
         const slotStats = {
           [TimeSlot.MORNING]: { total: 0, male: 0, female: 0 },
           [TimeSlot.LUNCH]: { total: 0, male: 0, female: 0 },
           [TimeSlot.DINNER]: { total: 0, male: 0, female: 0 },
         };
 
-        // 전체 유저를 순회하며 신청자 수 집계
         users.forEach(user => {
           TIME_SLOTS.forEach(slot => {
-            // 해당 유저가 해당 시간에 신청(true)했다면
             if (dailyData[user.name]?.[slot]) {
-              if (user.gender === 'male') slotStats[slot].male++;
-              else slotStats[slot].female++;
-              slotStats[slot].total++; // 전체 인원 증가
+              if (user.gender === 'male') {
+                slotStats[slot].male++;
+              } else {
+                slotStats[slot].female++;
+              }
+              slotStats[slot].total++;
             }
           });
         });
@@ -246,8 +228,6 @@
 
       return (
         <div className="flex flex-col space-y-4">
-          
-          {/* 상단 통계 요약 카드 영역 */}
           <div className="grid grid-cols-3 gap-2">
             {TIME_SLOTS.map((slot) => (
               <div key={slot} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
@@ -263,11 +243,9 @@
             ))}
           </div>
 
-          {/* 명단 및 체크 버튼 테이블 영역 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left border-collapse min-w-[320px]">
-                {/* 테이블 헤더 */}
                 <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                   <tr>
                     <th className="px-3 py-3 w-28 whitespace-nowrap text-center text-xs">이름</th>
@@ -276,83 +254,68 @@
                     ))}
                   </tr>
                 </thead>
-                
-                {/* 테이블 바디 (유저 명단) */}
                 <tbody className="divide-y divide-gray-100">
                   {users.map(user => (
                     <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-center">
-                          {/* 유저 아바타 (이름 첫 글자) */}
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shrink-0 ${user.avatarColor}`}>
                             {user.name[0]}
                           </div>
-                          {/* 유저 이름 */}
                           <span className={`font-semibold text-sm whitespace-nowrap ${user.gender === 'male' ? 'text-blue-900' : 'text-pink-900'}`}>{user.name}</span>
                         </div>
                       </td>
-                      
-                      {/* 아침, 점심, 저녁 체크 버튼 */}
                       {TIME_SLOTS.map(slot => {
-                          // 현재 셀의 선택 여부와 마감 여부 확인
-                          const isSelected = dailyData[user.name]?.[slot];
-                          const isClosed = isRegistrationClosed(selectedDate, slot);
+                         const isSelected = dailyData[user.name]?.[slot];
+                         const allowed = isRegistrationAllowed(selectedDate, slot);
+                         
+                         let btnClass = "w-full h-10 rounded-lg flex items-center justify-center transition-all duration-200 active:scale-95 ";
+                         
+                         if (!allowed) {
+                           if (isSelected) {
+                             btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
+                             btnClass += " cursor-not-allowed opacity-50";
+                           } else {
+                             btnClass += "bg-gray-200 text-gray-300 cursor-not-allowed";
+                           }
+                         } else {
+                           if (isSelected) {
+                             btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
+                           } else {
+                             btnClass += 'bg-gray-50 text-gray-300 hover:bg-gray-100';
+                           }
+                         }
 
-                          // 버튼 디자인 (마감 여부와 선택 여부에 따라 색상/스타일 변경)
-                          let btnClass = "w-full h-10 rounded-lg flex items-center justify-center transition-all duration-200 active:scale-95 ";
-                          
-                          if (isClosed) {
-                            if (isSelected) {
-                              btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
-                              btnClass += " cursor-not-allowed opacity-50"; 
-                            } else {
-                              btnClass += "bg-gray-200 text-gray-300 cursor-not-allowed";
-                            }
-                          } else {
-                            if (isSelected) {
-                              btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
-                            } else {
-                              btnClass += 'bg-gray-50 text-gray-300 hover:bg-gray-100';
-                            }
-                          }
-
-                          return (
-                            <td key={slot} className="p-1 text-center align-middle">
-                              <button
-                                // 클릭 이벤트 (마감이 안 되었을 때만 onToggle 실행)
-                                onClick={() => !isClosed && onToggle(user.name, slot, isSelected)}
-                                disabled={isClosed}
-                                className={btnClass}
-                              >
-                                {isSelected ? (
-                                  <Check size={18} strokeWidth={3} />
-                                ) : (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                )}
-                              </button>
-                            </td>
-                          );
+                         return (
+                           <td key={slot} className="p-1 text-center align-middle">
+                             <button
+                               onClick={() => allowed && onToggle(user.name, slot)}
+                               disabled={!allowed}
+                               className={btnClass}
+                             >
+                               {isSelected ? <Check size={18} strokeWidth={3} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />}
+                             </button>
+                           </td>
+                         );
                       })}
                     </tr>
                   ))}
                 </tbody>
-                
-                {/* 테이블 푸터 (하단 합계 부분) */}
                 <tfoot className="bg-gray-50 font-semibold text-gray-600 border-t border-gray-200">
-                    <tr>
-                      <td className="px-3 py-3 text-center text-xs">합계</td>
-                      {TIME_SLOTS.map(slot => (
-                        <td key={slot} className="text-center py-2 text-xs">
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-gray-900 font-bold mb-0.5">{stats.slotStats[slot].total}</span>
-                            <div className="flex gap-1 text-[9px] text-gray-400 font-normal">
-                              <span className="text-blue-500">M:{stats.slotStats[slot].male}</span>
-                              <span className="text-pink-500">F:{stats.slotStats[slot].female}</span>
-                            </div>
-                          </div>
-                        </td>
-                      ))}
-                    </tr>
+                   <tr>
+                     <td className="px-3 py-3 text-center text-xs">합계</td>
+                     {TIME_SLOTS.map(slot => (
+                       <td key={slot} className="text-center py-2 text-xs">
+                         <div className="flex flex-col items-center justify-center">
+                           <span className="text-gray-900 font-bold mb-0.5">{stats.slotStats[slot].total}</span>
+                           <div className="flex gap-1 text-[9px] text-gray-400 font-normal">
+                             <span className="text-blue-500">M:{stats.slotStats[slot].male}</span>
+                             <span className="text-pink-500">F:{stats.slotStats[slot].female}</span>
+                           </div>
+                         </div>
+                       </td>
+                     ))}
+                   </tr>
                 </tfoot>
               </table>
             </div>
@@ -361,98 +324,62 @@
       );
     };
 
-    // --- [6] 메인 앱 컴포넌트 ---
+    // --- Main App ---
     const App = () => {
-      // 상태 관리: 선택된 날짜, 주간 달력 시작 날짜, DB에서 가져온 신청 데이터
       const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
       const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
       const [registrations, setRegistrations] = useState({});
 
-      // [Firebase 실시간 구독 (useEffect)]
-      // selectedDate(선택된 날짜)가 변경될 때마다 실행됩니다.
-      useEffect(() => {
-        // 해당 날짜(예: '2024-05-20')의 문서를 참조합니다.
-        const docRef = doc(db, "daily_meals", selectedDate);
-        
-        // onSnapshot은 데이터베이스에 변화가 생길 때마다 자동으로 실행되는 리스너입니다.
-        const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
-          if (docSnapshot.exists()) {
-            // 문서가 존재하면 해당 날짜 키에 데이터를 저장
-            setRegistrations(prev => ({
-              ...prev,
-              [selectedDate]: docSnapshot.data()
-            }));
-          } else {
-            // 문서가 없으면 빈 객체로 초기화
-            setRegistrations(prev => ({
-              ...prev,
-              [selectedDate]: {}
-            }));
-          }
-        }, (error) => {
-          console.error("데이터 불러오기 실패:", error);
-        });
-
-        // 다른 날짜를 클릭하거나 컴포넌트가 사라질 때, 기존 리스너를 해제하여 메모리 누수를 막습니다.
-        return () => unsubscribe();
-      }, [selectedDate]); 
-
-      // 달력: 이전 주로 이동
       const handlePrevWeek = () => {
         const newDate = new Date(currentWeekStart);
         newDate.setDate(newDate.getDate() - 7);
         setCurrentWeekStart(newDate);
       };
 
-      // 달력: 다음 주로 이동
       const handleNextWeek = () => {
         const newDate = new Date(currentWeekStart);
         newDate.setDate(newDate.getDate() + 7);
         setCurrentWeekStart(newDate);
       };
 
-      // [데이터 저장 함수] 체크 버튼을 눌렀을 때 실행됩니다.
-      const toggleRegistration = async (userName, slot, currentValue) => {
-        // 서버 전송 전, 클라이언트 측에서 한 번 더 마감 여부를 검사
-        if (isRegistrationClosed(selectedDate, slot)) {
-          alert('신청 마감 시간이 지났습니다.');
+      const toggleRegistration = (userName, slot) => {
+        if (!isRegistrationAllowed(selectedDate, slot)) {
+          alert('신청 마감 시간이 지났거나 신청 가능한 기간이 아닙니다.\n(당일 포함 7일 이내 신청 가능)');
           return;
         }
 
-        try {
-          // Firestore 문서 참조
-          const docRef = doc(db, "daily_meals", selectedDate);
-          
-          // 저장할 데이터 구조 생성 (예: { "오타니": { "아침(07:00)": true } })
-          const newData = {
-            [userName]: {
-              [slot]: !currentValue // 기존 상태의 반대값(true <-> false) 저장
-            }
+        setRegistrations((prev) => {
+          const dailyData = prev[selectedDate] || {};
+          const userData = dailyData[userName] || {
+            [TimeSlot.MORNING]: false,
+            [TimeSlot.LUNCH]: false,
+            [TimeSlot.DINNER]: false,
           };
 
-          // Firestore에 저장
-          // { merge: true }를 사용해야 기존 다른 사람의 데이터를 덮어쓰지 않고 해당 이름만 업데이트합니다.
-          await setDoc(docRef, newData, { merge: true });
-          
-          // *참고: 여기서 굳이 setRegistrations()를 수동으로 호출할 필요가 없습니다.
-          // setDoc이 성공적으로 완료되면, 위쪽의 useEffect 안의 onSnapshot이 변화를 감지하여 
-          // 자동으로 React 상태를 최신화하고 화면을 다시 그려줍니다. (이것이 실시간 동기화의 핵심)
-          
-        } catch (e) {
-          console.error("저장 실패:", e);
-          alert("저장에 실패했습니다. 인터넷 연결을 확인하세요.");
-        }
+          const newUserData = {
+            ...userData,
+            [slot]: !userData[slot],
+          };
+
+          return {
+            ...prev,
+            [selectedDate]: {
+              ...dailyData,
+              [userName]: newUserData,
+            },
+          };
+        });
       };
 
       return (
-        <div className="min-h-screen bg-gray-50 font-sans">
-          {/* 상단 헤더 영역 */}
+        <div className="min-h-screen bg-gray-50 pb-20 font-sans">
+          {/* Header */}
           <header className="bg-white px-6 pt-12 pb-6 border-b sticky top-0 z-20 shadow-sm">
             <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
-            <p className="text-xs text-gray-400 mt-1">Firebase 실시간 연동됨</p>
+		<p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
           </header>
 
-          {/* 주간 달력 영역 */}
+          {/* Calendar Strip */}
           <WeekCalendar
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
@@ -461,22 +388,27 @@
             onNextWeek={handleNextWeek}
           />
 
-          {/* 메인 테이블 영역 */}
+          {/* Main Content */}
           <main className="max-w-md mx-auto px-4 py-6">
+            
+            {/* Excel-like Table View with Stats */}
             <DailyTable 
               users={USERS} 
-              dailyData={registrations[selectedDate] || {}} // 데이터가 아직 안 들어왔으면 빈 객체 전달
+              dailyData={registrations[selectedDate] || {}}
               selectedDate={selectedDate}
               onToggle={toggleRegistration}
             />
+            
           </main>
         </div>
       );
     };
 
-    // React 앱을 root 요소에 렌더링
     const root = createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
 </body>
 </html>
+
+
+
