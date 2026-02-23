@@ -5,13 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>문경 학사 식사 신청</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   
-  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
@@ -28,7 +25,6 @@
     }
   </style>
 
-  <!-- Import Map for React modules -->
   <script type="importmap">
 {
   "imports": {
@@ -46,6 +42,22 @@
     import React, { useState, useEffect, useMemo } from 'react';
     import { createRoot } from 'react-dom/client';
     import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+
+    // --- [추가됨] Firebase 라이브러리 가져오기 ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    // --- [추가됨] Firebase 설정 및 초기화 ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCwIp4CA2P41CBOzirB6dTrOTzMO4DWYpA",
+      authDomain: "list-03-1efd8.firebaseapp.com",
+      projectId: "list-03-1efd8",
+      storageBucket: "list-03-1efd8.firebasestorage.app",
+      messagingSenderId: "73291844896",
+      appId: "1:73291844896:web:802e4821e16313eee0db45"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
     // --- Constants & Types ---
     const TimeSlot = {
@@ -78,7 +90,7 @@
 
     const USERS = [
       { id: '1', name: '사감님', avatarColor: 'bg-blue-100 text-blue-600', gender: 'male' },
-		{ id: '2', name: '여사님', avatarColor: 'bg-pink-100 text-pink-600', gender: 'female' },
+      { id: '2', name: '여사님', avatarColor: 'bg-pink-100 text-pink-600', gender: 'female' },
       ...createUsers(MALE_ADDITIONAL_NAMES, 'male', 'male-custom'),
       ...createUsers(FEMALE_ADDITIONAL_NAMES, 'female', 'female-custom'),
     ];
@@ -331,6 +343,23 @@
       const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
       const [registrations, setRegistrations] = useState({});
 
+      // --- [수정됨] Firebase 데이터 실시간 불러오기 ---
+      useEffect(() => {
+        const docRef = doc(db, "daily_meals", selectedDate);
+        
+        const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
+          if (docSnapshot.exists()) {
+            setRegistrations(prev => ({ ...prev, [selectedDate]: docSnapshot.data() }));
+          } else {
+            setRegistrations(prev => ({ ...prev, [selectedDate]: {} }));
+          }
+        }, (error) => {
+          console.error("데이터 로드 실패:", error);
+        });
+
+        return () => unsubscribe();
+      }, [selectedDate]);
+
       const handlePrevWeek = () => {
         const newDate = new Date(currentWeekStart);
         newDate.setDate(newDate.getDate() - 7);
@@ -343,33 +372,30 @@
         setCurrentWeekStart(newDate);
       };
 
-      const toggleRegistration = (userName, slot) => {
+      // --- [수정됨] Firebase에 데이터 실시간 저장하기 ---
+      const toggleRegistration = async (userName, slot) => {
         if (!isRegistrationAllowed(selectedDate, slot)) {
           alert('신청 마감 시간이 지났거나 신청 가능한 기간이 아닙니다.\n(당일 포함 7일 이내 신청 가능)');
           return;
         }
 
-        setRegistrations((prev) => {
-          const dailyData = prev[selectedDate] || {};
-          const userData = dailyData[userName] || {
-            [TimeSlot.MORNING]: false,
-            [TimeSlot.LUNCH]: false,
-            [TimeSlot.DINNER]: false,
-          };
+        // 현재 클릭한 사람의 현재 선택 상태(true/false) 확인
+        const currentDailyData = registrations[selectedDate] || {};
+        const isCurrentlySelected = currentDailyData[userName]?.[slot] || false;
 
-          const newUserData = {
-            ...userData,
-            [slot]: !userData[slot],
-          };
-
-          return {
-            ...prev,
-            [selectedDate]: {
-              ...dailyData,
-              [userName]: newUserData,
-            },
-          };
-        });
+        try {
+          // DB에 바로 저장 명령을 내립니다. (성공하면 위의 useEffect가 감지해서 화면을 바꿉니다)
+          const docRef = doc(db, "daily_meals", selectedDate);
+          await setDoc(docRef, {
+            [userName]: {
+              [slot]: !isCurrentlySelected
+            }
+          }, { merge: true }); // merge: true를 해야 다른 사람 데이터를 안 날려먹습니다.
+          
+        } catch (error) {
+          console.error("저장 실패:", error);
+          alert("데이터 저장에 실패했습니다.");
+        }
       };
 
       return (
@@ -377,7 +403,7 @@
           {/* Header */}
           <header className="bg-white px-6 pt-12 pb-6 border-b sticky top-0 z-20 shadow-sm">
             <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
-		<p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
+            <p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
           </header>
 
           {/* Calendar Strip */}
@@ -391,15 +417,12 @@
 
           {/* Main Content */}
           <main className="max-w-md mx-auto px-4 py-6">
-            
-            {/* Excel-like Table View with Stats */}
             <DailyTable 
               users={USERS} 
               dailyData={registrations[selectedDate] || {}}
               selectedDate={selectedDate}
               onToggle={toggleRegistration}
             />
-            
           </main>
         </div>
       );
@@ -410,6 +433,3 @@
   </script>
 </body>
 </html>
-
-
-
