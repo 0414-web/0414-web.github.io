@@ -90,7 +90,7 @@
 
     const USERS = [
       { id: '1', name: '사감님', avatarColor: 'bg-blue-100 text-blue-600', gender: 'male' },
-      { id: '2', name: '여사님', avatarColor: 'bg-pink-100 text-pink-600', gender: 'female' },
+      { id: '2', name: '어머님', avatarColor: 'bg-pink-100 text-pink-600', gender: 'female' },
       ...createUsers(MALE_ADDITIONAL_NAMES, 'male', 'male-custom'),
       ...createUsers(FEMALE_ADDITIONAL_NAMES, 'female', 'female-custom'),
     ];
@@ -404,6 +404,7 @@
           <header className="bg-white px-6 pt-12 pb-6 border-b sticky top-0 z-20 shadow-sm">
             <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
             <p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
+            <p className="text-xs text-gray-400 mt-1">* 식사 신청은 식사시간 2시간 전 마감됩니다.</p>
           </header>
 
           {/* Calendar Strip */}
