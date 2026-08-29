@@ -544,24 +544,38 @@
         if (!initialLoadDoneRef.current) {
           setDataLoading(true);
 
-          // 빠른 단발성 조회로 최초 화면을 먼저 채움
+          // 빠른 단발성 조회로 화면을 먼저 채우되, 서버에서 확인된 데이터일 때만 로딩을 해제한다.
+          // (로컬 캐시에서 온 오래된 데이터로는 "로딩 완료" 처리하지 않음)
           getDoc(docRef).then(snap => {
             if (cancelled) return;
-            setRegistrations(prev => ({ ...prev, [selectedDate]: snap.exists() ? snap.data() : {} }));
-            initialLoadDoneRef.current = true;
-            setDataLoading(false);
+            if (!snap.metadata.fromCache) {
+              setRegistrations(prev => ({ ...prev, [selectedDate]: snap.exists() ? snap.data() : {} }));
+              initialLoadDoneRef.current = true;
+              setDataLoading(false);
+            }
+            // fromCache인 경우 신뢰할 수 없는 데이터이므로 화면 반영도, 로딩 해제도 하지 않고
+            // 아래 onSnapshot이 서버 확인 데이터를 가져올 때까지 기다린다.
           }).catch(err => {
             console.error("초기 단발성 조회 실패:", err);
+            // 여기서 실패해도 아래 onSnapshot이 계속 시도하므로 별도 처리하지 않음
           });
         }
 
-        // 실시간 구독은 항상 연결 (날짜 변경/재연결 시에도 팝업 없이 조용히 갱신)
+        // 실시간 구독은 항상 연결 (날짜 변경/재연결 시에도 팝업 없이 조용히 갱신).
+        // includeMetadataChanges: true 로 설정해야, 캐시 데이터와 내용이 같아도
+        // "서버에서 확인됨"으로 상태가 바뀌는 순간을 별도로 감지할 수 있다.
         const subscribe = () => {
-          return onSnapshot(docRef, (docSnapshot) => {
+          return onSnapshot(docRef, { includeMetadataChanges: true }, (docSnapshot) => {
             if (cancelled) return;
+
+            // 화면에는 우선 최신으로 받은 데이터를 반영 (캐시든 서버든 일단 표시는 함)
             setRegistrations(prev => ({ ...prev, [selectedDate]: docSnapshot.exists() ? docSnapshot.data() : {} }));
-            if (!initialLoadDoneRef.current) {
-              initialLoadDoneRef.current = true;
+
+            // "로딩 완료"는 서버에서 확인된 데이터일 때만 처리 (fromCache가 아닐 때)
+            if (!docSnapshot.metadata.fromCache) {
+              if (!initialLoadDoneRef.current) {
+                initialLoadDoneRef.current = true;
+              }
               setDataLoading(false);
             }
           }, (error) => {
