@@ -669,11 +669,6 @@
 
           {/* Main Content: 로그인 여부와 무관하게 전체 현황 항상 표시 */}
           <main className="max-w-md mx-auto px-4 py-6">
-            {dataLoading && (
-              <div className="mb-4 text-xs text-gray-400 bg-white border border-gray-100 rounded-xl px-3 py-2 text-center">
-                신청 현황을 불러오는 중...
-              </div>
-            )}
             <DailyTable 
               users={USERS} 
               dailyData={registrations[selectedDate] || {}}
@@ -688,6 +683,15 @@
               onClose={() => setShowLoginModal(false)}
               onLoginSuccess={handleLoginSuccess}
             />
+          )}
+
+          {dataLoading && (
+            <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center px-8">
+              <div className="bg-white rounded-2xl px-6 py-5 shadow-lg flex flex-col items-center gap-3 max-w-xs w-full">
+                <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p className="text-sm font-medium text-gray-600">신청 현황을 불러오는 중...</p>
+              </div>
+            </div>
           )}
         </div>
       );
