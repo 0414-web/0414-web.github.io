@@ -527,31 +527,50 @@
         }
       });
       const [showLoginModal, setShowLoginModal] = useState(false);
+      // dataLoading: 오직 "최초 접속/새로고침" 시점에만 true였다가 데이터가 오면 false로 바뀜.
+      // 이후 날짜 변경이나 재연결 시에는 이 값을 다시 true로 돌리지 않아 팝업이 뜨지 않는다.
       const [dataLoading, setDataLoading] = useState(true);
+      const initialLoadDoneRef = React.useRef(false);
 
       // 식사 신청 현황: 로그인 여부와 무관하게 항상 실시간으로 전체 공개.
-      // 진입 시 데이터가 확실히 불러와지도록, 불러오기 전에는 "로딩중" 상태를 유지하고
-      // 실시간 연결이 실패하면 자동으로 재연결을 시도한다.
+      // 최초 로딩 시에만 getDoc으로 빠르게 데이터를 채우고 로딩 팝업을 해제하며,
+      // 이후에는 onSnapshot 실시간 구독만으로 조용히 갱신한다 (날짜 변경 시에도 팝업 없음).
       useEffect(() => {
         let cancelled = false;
         let retryTimer = null;
         const docRef = doc(db, "daily_meals", selectedDate);
 
-        setDataLoading(true);
+        // 최초 접속(=아직 한 번도 로딩 완료 안 됨)일 때만 로딩 팝업 표시
+        if (!initialLoadDoneRef.current) {
+          setDataLoading(true);
 
+          // 빠른 단발성 조회로 최초 화면을 먼저 채움
+          getDoc(docRef).then(snap => {
+            if (cancelled) return;
+            setRegistrations(prev => ({ ...prev, [selectedDate]: snap.exists() ? snap.data() : {} }));
+            initialLoadDoneRef.current = true;
+            setDataLoading(false);
+          }).catch(err => {
+            console.error("초기 단발성 조회 실패:", err);
+          });
+        }
+
+        // 실시간 구독은 항상 연결 (날짜 변경/재연결 시에도 팝업 없이 조용히 갱신)
         const subscribe = () => {
           return onSnapshot(docRef, (docSnapshot) => {
             if (cancelled) return;
             setRegistrations(prev => ({ ...prev, [selectedDate]: docSnapshot.exists() ? docSnapshot.data() : {} }));
-            setDataLoading(false); // 데이터가 정상적으로 도착했을 때만 로딩 해제
+            if (!initialLoadDoneRef.current) {
+              initialLoadDoneRef.current = true;
+              setDataLoading(false);
+            }
           }, (error) => {
-            console.error("실시간 연결 실패, 3초 후 재시도:", error);
-            // 연결 실패 시 로딩중 상태를 유지한 채로 재시도
+            console.error("실시간 연결 실패, 1초 후 재시도:", error);
             if (!cancelled) {
               retryTimer = setTimeout(() => {
                 unsubscribeRef.current && unsubscribeRef.current();
                 unsubscribeRef.current = subscribe();
-              }, 3000);
+              }, 1000);
             }
           });
         };
