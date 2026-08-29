@@ -42,13 +42,13 @@
   <script type="text/babel" data-type="module">
     import React, { useState, useEffect, useMemo } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+    import { ChevronLeft, ChevronRight, Check, LogIn, LogOut, X, User as UserIcon } from 'lucide-react';
 
-    // --- [추가됨] Firebase 라이브러리 가져오기 ---
+    // --- Firebase 라이브러리 가져오기 ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getFirestore, doc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    // --- [추가됨] Firebase 설정 및 초기화 ---
+    // --- Firebase 설정 및 초기화 ---
     const firebaseConfig = {
       apiKey: "AIzaSyCwIp4CA2P41CBOzirB6dTrOTzMO4DWYpA",
       authDomain: "list-03-1efd8.firebaseapp.com",
@@ -89,12 +89,18 @@
       }));
     };
 
+    // 사감님, 어머님은 PIN 로그인 없이 누구나 신청 가능한 공용 계정입니다.
+    const PUBLIC_NAMES = ['사감님', '어머님'];
+
     const USERS = [
       { id: '1', name: '사감님', avatarColor: 'bg-blue-100 text-blue-600', gender: 'male' },
       { id: '2', name: '어머님', avatarColor: 'bg-pink-100 text-pink-600', gender: 'female' },
       ...createUsers(MALE_ADDITIONAL_NAMES, 'male', 'male-custom'),
       ...createUsers(FEMALE_ADDITIONAL_NAMES, 'female', 'female-custom'),
     ];
+
+    // 로그인 모달에서 선택 가능한 목록 (공용 계정 제외)
+    const LOGIN_SELECTABLE_USERS = USERS.filter(u => !PUBLIC_NAMES.includes(u.name));
 
     // --- Utils ---
     const formatDate = (date) => {
@@ -159,7 +165,7 @@
       const days = getWeekDays(startDate);
 
       return (
-        <div className="bg-white shadow-sm border-b sticky top-0 z-10">
+        <div className="bg-white shadow-sm border-b sticky top-[73px] z-10">
           <div className="max-w-md mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-4">
               <button 
@@ -216,7 +222,7 @@
       );
     };
 
-    const DailyTable = ({ users, dailyData, selectedDate, onToggle }) => {
+    const DailyTable = ({ users, dailyData, selectedDate, onToggle, currentUser }) => {
       const stats = useMemo(() => {
         const slotStats = {
           [TimeSlot.MORNING]: { total: 0, male: 0, female: 0 },
@@ -269,35 +275,42 @@
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {users.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-100 transition-colors">
+                  {users.map(user => {
+                    const isMe = currentUser === user.name;
+                    const isPublic = PUBLIC_NAMES.includes(user.name);
+                    const canEdit = isMe || isPublic;
+                    return (
+                    <tr
+                      key={user.id}
+                      className="hover:bg-gray-100 transition-colors"
+                    >
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-center">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shrink-0 ${user.avatarColor}`}>
                             {user.name[0]}
                           </div>
-                          <span className={`font-semibold text-sm whitespace-nowrap ${user.gender === 'male' ? 'text-blue-900' : 'text-pink-900'}`}>{user.name}</span>
+                          {/* 090909272727 - 본인 이름 밑줄 색상(decoration-indigo-400)을 원하는 색상으로 바꾸세요 */}
+                          <span className={`font-semibold text-sm whitespace-nowrap ${user.gender === 'male' ? 'text-blue-900' : 'text-pink-900'} ${isMe ? 'underline decoration-2 decoration-indigo-400 underline-offset-2' : ''}`}>{user.name}</span>
                         </div>
                       </td>
                       {TIME_SLOTS.map(slot => {
                          const isSelected = dailyData[user.name]?.[slot];
-                         const allowed = isRegistrationAllowed(selectedDate, slot);
+                         const timeAllowed = isRegistrationAllowed(selectedDate, slot);
+                         const allowed = timeAllowed && canEdit;
                          
                          let btnClass = "w-full h-10 rounded-lg flex items-center justify-center transition-all duration-200 active:scale-95 ";
                          
-                         if (!allowed) {
-                           if (isSelected) {
-                             btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
-                             btnClass += " cursor-not-allowed opacity-50";
-                           } else {
-                             btnClass += "bg-gray-200 text-gray-300 cursor-not-allowed";
-                           }
+                         if (isSelected) {
+                           btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
+                           if (!timeAllowed) btnClass += " opacity-50";
                          } else {
-                           if (isSelected) {
-                             btnClass += (user.gender === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'bg-pink-500 text-white shadow-sm');
-                           } else {
-                             btnClass += 'bg-gray-50 text-gray-300 hover:bg-gray-100';
-                           }
+                           btnClass += timeAllowed ? 'bg-gray-50 text-gray-300' : 'bg-gray-100 text-gray-200';
+                         }
+
+                         if (allowed) {
+                           btnClass += ' hover:brightness-95 cursor-pointer';
+                         } else {
+                           btnClass += ' cursor-not-allowed';
                          }
 
                          return (
@@ -305,6 +318,7 @@
                              <button
                                onClick={() => allowed && onToggle(user.name, slot)}
                                disabled={!allowed}
+                               title={!canEdit ? '본인만 신청할 수 있습니다' : (!timeAllowed ? '신청 마감' : '')}
                                className={btnClass}
                              >
                                {isSelected ? <Check size={18} strokeWidth={3} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />}
@@ -313,7 +327,7 @@
                          );
                       })}
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
                 <tfoot className="bg-gray-50 font-semibold text-gray-600 border-t border-gray-200">
                    <tr>
@@ -338,13 +352,183 @@
       );
     };
 
+    // --- 로그인 모달 ---
+    // step: 'select' (이름 선택) -> 'register' (PIN 최초 설정) | 'login' (PIN 입력)
+    const LoginModal = ({ onClose, onLoginSuccess }) => {
+      const [step, setStep] = useState('select');
+      const [selectedName, setSelectedName] = useState(null);
+      const [pin, setPin] = useState('');
+      const [pinConfirm, setPinConfirm] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSelectName = async (name) => {
+        setError('');
+        setSelectedName(name);
+        setLoading(true);
+        try {
+          const userSnap = await getDoc(doc(db, "users", name));
+          if (userSnap.exists() && userSnap.data().pin) {
+            setStep('login');
+          } else {
+            setStep('register');
+          }
+        } catch (e) {
+          setError('사용자 정보를 불러오지 못했습니다.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleRegister = async () => {
+        setError('');
+        if (!/^\d{4}$/.test(pin)) {
+          setError('PIN은 숫자 4자리로 입력해주세요.');
+          return;
+        }
+        if (pin !== pinConfirm) {
+          setError('PIN이 서로 일치하지 않습니다.');
+          return;
+        }
+        setLoading(true);
+        try {
+          await setDoc(doc(db, "users", selectedName), {
+            pin,
+            registeredAt: new Date().toISOString(),
+          }, { merge: true });
+          onLoginSuccess(selectedName);
+        } catch (e) {
+          setError('등록에 실패했습니다. 다시 시도해주세요.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleLogin = async () => {
+        setError('');
+        setLoading(true);
+        try {
+          const userSnap = await getDoc(doc(db, "users", selectedName));
+          if (userSnap.exists() && userSnap.data().pin === pin) {
+            onLoginSuccess(selectedName);
+          } else {
+            setError('PIN이 일치하지 않습니다.');
+            setPin('');
+          }
+        } catch (e) {
+          setError('로그인에 실패했습니다. 다시 시도해주세요.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full sm:w-96 sm:rounded-2xl rounded-t-2xl p-5 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">
+                {step === 'select' && '본인 이름을 선택하세요'}
+                {step === 'register' && `${selectedName}님, PIN을 설정하세요`}
+                {step === 'login' && `${selectedName}님, PIN을 입력하세요`}
+              </h3>
+              <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 text-gray-400">
+                <X size={20} />
+              </button>
+            </div>
+
+            {step === 'select' && (
+              <div className="overflow-y-auto flex-1 grid grid-cols-3 gap-2">
+                {LOGIN_SELECTABLE_USERS.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleSelectName(user.name)}
+                    disabled={loading}
+                    className="flex flex-col items-center justify-center py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mb-1 ${user.avatarColor}`}>
+                      {user.name[0]}
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">{user.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {step === 'register' && (
+              <div className="flex flex-col space-y-3">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="새 PIN 4자리"
+                  value={pin}
+                  onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                  className="border border-gray-200 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="PIN 4자리 확인"
+                  value={pinConfirm}
+                  onChange={e => setPinConfirm(e.target.value.replace(/\D/g, ''))}
+                  className="border border-gray-200 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                {error && <p className="text-xs text-red-500">{error}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { setStep('select'); setPin(''); setPinConfirm(''); setError(''); }} className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-semibold text-sm">
+                    뒤로
+                  </button>
+                  <button onClick={handleRegister} disabled={loading} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm disabled:opacity-50">
+                    {loading ? '처리중...' : '등록하고 시작하기'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'login' && (
+              <div className="flex flex-col space-y-3">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="PIN 4자리"
+                  value={pin}
+                  onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                  autoFocus
+                  className="border border-gray-200 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                {error && <p className="text-xs text-red-500">{error}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { setStep('select'); setPin(''); setError(''); }} className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-semibold text-sm">
+                    뒤로
+                  </button>
+                  <button onClick={handleLogin} disabled={loading || pin.length !== 4} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm disabled:opacity-50">
+                    {loading ? '확인중...' : '로그인'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
     // --- Main App ---
     const App = () => {
       const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
       const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
       const [registrations, setRegistrations] = useState({});
+      const [currentUser, setCurrentUser] = useState(() => {
+        try {
+          return localStorage.getItem('currentUser') || null;
+        } catch (e) {
+          return null;
+        }
+      });
+      const [showLoginModal, setShowLoginModal] = useState(false);
 
-      // --- [수정됨] Firebase 데이터 실시간 불러오기 ---
+      // 식사 신청 현황: 로그인 여부와 무관하게 항상 실시간으로 전체 공개
       useEffect(() => {
         const docRef = doc(db, "daily_meals", selectedDate);
         
@@ -373,29 +557,49 @@
         setCurrentWeekStart(newDate);
       };
 
-      // --- [수정됨] Firebase에 데이터 실시간 저장하기 ---
       const toggleRegistration = async (userName, slot) => {
+        // 본인이거나, 로그인 없이 누구나 신청 가능한 공용 계정(사감님/어머님)만 허용
+        const canEdit = userName === currentUser || PUBLIC_NAMES.includes(userName);
+        if (!canEdit) {
+          return;
+        }
         if (!isRegistrationAllowed(selectedDate, slot)) {
           alert('신청 마감 시간이 지났거나 신청 가능한 기간이 아닙니다.\n(당일 포함 7일 이내 신청 가능)');
           return;
         }
 
-        // 현재 클릭한 사람의 현재 선택 상태(true/false) 확인
         const currentDailyData = registrations[selectedDate] || {};
         const isCurrentlySelected = currentDailyData[userName]?.[slot] || false;
 
         try {
-          // DB에 바로 저장 명령을 내립니다. (성공하면 위의 useEffect가 감지해서 화면을 바꿉니다)
           const docRef = doc(db, "daily_meals", selectedDate);
           await setDoc(docRef, {
             [userName]: {
               [slot]: !isCurrentlySelected
             }
-          }, { merge: true }); // merge: true를 해야 다른 사람 데이터를 안 날려먹습니다.
-          
+          }, { merge: true });
         } catch (error) {
           console.error("저장 실패:", error);
           alert("데이터 저장에 실패했습니다.");
+        }
+      };
+
+      const handleLoginSuccess = (name) => {
+        setCurrentUser(name);
+        try {
+          localStorage.setItem('currentUser', name);
+        } catch (e) {
+          console.error("로그인 정보 저장 실패:", e);
+        }
+        setShowLoginModal(false);
+      };
+
+      const handleLogout = () => {
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem('currentUser');
+        } catch (e) {
+          console.error("로그아웃 처리 실패:", e);
         }
       };
 
@@ -403,9 +607,34 @@
         <div className="min-h-screen bg-gray-50 pb-20 font-sans">
           {/* Header */}
           <header className="bg-white px-6 pt-12 pb-6 border-b sticky top-0 z-20 shadow-sm">
-            <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
-            <p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
-            <p className="text-xs text-gray-400 mt-1">* 식사 신청은 식사시간 2시간 전 마감됩니다.</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-2xl font-extrabold text-gray-900">문경 학사 식사 신청</h1>
+                <p className="text-xs text-gray-400 mt-1">2026학년도 1학기</p>
+                <p className="text-xs text-gray-400 mt-1">* 식사 신청은 식사시간 2시간 전 마감됩니다.</p>
+              </div>
+              {currentUser ? (
+                <div className="flex flex-col items-end shrink-0">
+                  <div className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-full mb-1">
+                    <UserIcon size={12} />
+                    {currentUser}
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600"
+                  >
+                    <LogOut size={12} /> 나가기
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="flex items-center gap-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-full shrink-0 transition-colors"
+                >
+                  <LogIn size={14} /> 로그인
+                </button>
+              )}
+            </div>
           </header>
 
           {/* Calendar Strip */}
@@ -417,15 +646,23 @@
             onNextWeek={handleNextWeek}
           />
 
-          {/* Main Content */}
+          {/* Main Content: 로그인 여부와 무관하게 전체 현황 항상 표시 */}
           <main className="max-w-md mx-auto px-4 py-6">
             <DailyTable 
               users={USERS} 
               dailyData={registrations[selectedDate] || {}}
               selectedDate={selectedDate}
               onToggle={toggleRegistration}
+              currentUser={currentUser}
             />
           </main>
+
+          {showLoginModal && (
+            <LoginModal
+              onClose={() => setShowLoginModal(false)}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          )}
         </div>
       );
     };
