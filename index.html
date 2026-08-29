@@ -527,22 +527,42 @@
         }
       });
       const [showLoginModal, setShowLoginModal] = useState(false);
+      const [dataLoading, setDataLoading] = useState(true);
 
-      // 식사 신청 현황: 로그인 여부와 무관하게 항상 실시간으로 전체 공개
+      // 식사 신청 현황: 로그인 여부와 무관하게 항상 실시간으로 전체 공개.
+      // 진입 시 데이터가 확실히 불러와지도록, 불러오기 전에는 "로딩중" 상태를 유지하고
+      // 실시간 연결이 실패하면 자동으로 재연결을 시도한다.
       useEffect(() => {
+        let cancelled = false;
+        let retryTimer = null;
         const docRef = doc(db, "daily_meals", selectedDate);
-        
-        const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
-          if (docSnapshot.exists()) {
-            setRegistrations(prev => ({ ...prev, [selectedDate]: docSnapshot.data() }));
-          } else {
-            setRegistrations(prev => ({ ...prev, [selectedDate]: {} }));
-          }
-        }, (error) => {
-          console.error("데이터 로드 실패:", error);
-        });
 
-        return () => unsubscribe();
+        setDataLoading(true);
+
+        const subscribe = () => {
+          return onSnapshot(docRef, (docSnapshot) => {
+            if (cancelled) return;
+            setRegistrations(prev => ({ ...prev, [selectedDate]: docSnapshot.exists() ? docSnapshot.data() : {} }));
+            setDataLoading(false); // 데이터가 정상적으로 도착했을 때만 로딩 해제
+          }, (error) => {
+            console.error("실시간 연결 실패, 3초 후 재시도:", error);
+            // 연결 실패 시 로딩중 상태를 유지한 채로 재시도
+            if (!cancelled) {
+              retryTimer = setTimeout(() => {
+                unsubscribeRef.current && unsubscribeRef.current();
+                unsubscribeRef.current = subscribe();
+              }, 3000);
+            }
+          });
+        };
+
+        const unsubscribeRef = { current: subscribe() };
+
+        return () => {
+          cancelled = true;
+          if (retryTimer) clearTimeout(retryTimer);
+          unsubscribeRef.current && unsubscribeRef.current();
+        };
       }, [selectedDate]);
 
       const handlePrevWeek = () => {
@@ -578,6 +598,7 @@
               [slot]: !isCurrentlySelected
             }
           }, { merge: true });
+          // onSnapshot 실시간 구독이 저장 직후 자동으로 화면을 갱신하므로 별도 처리 불필요
         } catch (error) {
           console.error("저장 실패:", error);
           alert("데이터 저장에 실패했습니다.");
@@ -648,6 +669,11 @@
 
           {/* Main Content: 로그인 여부와 무관하게 전체 현황 항상 표시 */}
           <main className="max-w-md mx-auto px-4 py-6">
+            {dataLoading && (
+              <div className="mb-4 text-xs text-gray-400 bg-white border border-gray-100 rounded-xl px-3 py-2 text-center">
+                신청 현황을 불러오는 중...
+              </div>
+            )}
             <DailyTable 
               users={USERS} 
               dailyData={registrations[selectedDate] || {}}
